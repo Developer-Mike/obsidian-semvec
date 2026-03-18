@@ -1,11 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
-import fs from "fs";
-import { createRequire } from "module";
 import builtins from "builtin-modules";
 import { copy } from "esbuild-plugin-copy";
-
-const require = createRequire(import.meta.url);
 
 const banner =
 `/*
@@ -38,6 +34,9 @@ const context = await esbuild.context({
     "@lezer/lr",
     ...builtins
   ],
+  define: {
+    "import.meta.url": JSON.stringify("file:///ort-placeholder"),
+  },
   format: "cjs",
   target: "es2018",
   logLevel: "info",

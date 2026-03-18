@@ -18,14 +18,8 @@ export default class SemVec extends Plugin {
 
     this.embedding = new EmbeddingModelManager(this)
 
-    this.addCommand({
-      id: "embed-sample",
-      name: "Embed Sample Text",
-      callback: async () => {
-        const vector = await this.embedding.getVector("This is a sample text.")
-        console.log(vector)
-      },
-    })
+    const vector = await this.embedding.getVector("This is a sample text.")
+    console.log(vector)
   }
 
   override async onunload() {
