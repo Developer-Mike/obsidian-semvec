@@ -1,6 +1,6 @@
 import { pipeline, FeatureExtractionPipeline } from "@huggingface/transformers"
 
-export default class VectorHelper {
+export default class EmbeddingModelManager {
   private extractor: FeatureExtractionPipeline | null = null
 
   private async getExtractor(): Promise<FeatureExtractionPipeline> {
