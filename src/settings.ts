@@ -1,22 +1,22 @@
 import { PluginSettingTab } from "obsidian"
-import ExamplePlugin from "./main"
+import SemVer from "./main"
 
-export interface ExamplePluginSettings {
+export interface SemVerSettings {
 
 }
 
-export const DEFAULT_SETTINGS: Partial<ExamplePluginSettings> = {
+export const DEFAULT_SETTINGS: Partial<SemVerSettings> = {
 
 }
 
 export default class SettingsManager {
-  static SETTINGS_CHANGED_EVENT = 'example-plugin:settings-changed'
+  static SETTINGS_CHANGED_EVENT = 'semver:settings-changed'
 
-  private plugin: ExamplePlugin
-  private settings: ExamplePluginSettings
-  private settingsTab: ExamplePluginSettingTab
+  private plugin: SemVer
+  private settings: SemVerSettings
+  private settingsTab: SemVerSettingTab
 
-  constructor(plugin: ExamplePlugin) {
+  constructor(plugin: SemVer) {
     this.plugin = plugin
   }
 
@@ -29,26 +29,26 @@ export default class SettingsManager {
     await this.plugin.saveData(this.settings)
   }
 
-  getSetting<T extends keyof ExamplePluginSettings>(key: T): ExamplePluginSettings[T] {
+  getSetting<T extends keyof SemVerSettings>(key: T): SemVerSettings[T] {
     return this.settings[key]
   }
 
-  async setSetting(data: Partial<ExamplePluginSettings>) {
+  async setSetting(data: Partial<SemVerSettings>) {
     this.settings = Object.assign(this.settings, data)
     await this.saveSettings()
     this.plugin.app.workspace.trigger(SettingsManager.SETTINGS_CHANGED_EVENT)
   }
 
   addSettingsTab() {
-    this.settingsTab = new ExamplePluginSettingTab(this.plugin, this)
+    this.settingsTab = new SemVerSettingTab(this.plugin, this)
     this.plugin.addSettingTab(this.settingsTab)
   }
 }
 
-export class ExamplePluginSettingTab extends PluginSettingTab {
+export class SemVerSettingTab extends PluginSettingTab {
   settingsManager: SettingsManager
 
-  constructor(plugin: ExamplePlugin, settingsManager: SettingsManager) {
+  constructor(plugin: SemVer, settingsManager: SettingsManager) {
     super(plugin.app, plugin)
     this.settingsManager = settingsManager
   }

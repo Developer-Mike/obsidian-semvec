@@ -1,9 +1,9 @@
 {
-	"id": "example-plugin",
-	"name": "Example Plugin",
+	"id": "semver",
+	"name": "SemVer",
 	"version": "0.0.1",
 	"minAppVersion": "1.1.0",
-	"description": "Example Description",
+	"description": "",
 	"author": "Developer-Mike",
 	"authorUrl": "https://github.com/Developer-Mike",
 	"isDesktopOnly": false

@@ -1,7 +1,7 @@
 import { Plugin } from "obsidian"
 import SettingsManager from "./settings"
 
-export default class ExamplePlugin extends Plugin {
+export default class SemVer extends Plugin {
   settings: SettingsManager
 
 	async onload() {
