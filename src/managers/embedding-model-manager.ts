@@ -1,5 +1,12 @@
 import { pipeline, FeatureExtractionPipeline } from "@huggingface/transformers"
+import { FileSystemAdapter } from "obsidian"
+import * as path from "path"
 import SemVec from "src/main"
+
+const MODELS = {
+  "embeddinggemma": "google/embeddinggemma-300m",
+  "qwen3-embedding": "onnx-community/Qwen3-Embedding-0.6B-ONNX"
+} as const
 
 export default class EmbeddingModelManager {
   private plugin: SemVec
@@ -9,13 +16,18 @@ export default class EmbeddingModelManager {
     this.plugin = plugin
   }
 
+  private getModelsPath(): string {
+    const adapter = this.plugin.app.vault.adapter as FileSystemAdapter
+    return path.join(adapter.getBasePath(), this.plugin.manifest.dir!, "models")
+  }
+
   private async getExtractor(): Promise<FeatureExtractionPipeline> {
     if (this.extractor) return this.extractor
 
     this.extractor = await pipeline(
       "feature-extraction",
-      "google/embeddinggemma-300m",
-      { dtype: "fp32" }
+      MODELS["qwen3-embedding"],
+      { dtype: "fp32", cache_dir: this.getModelsPath() }
     ) as unknown as FeatureExtractionPipeline
 
     return this.extractor

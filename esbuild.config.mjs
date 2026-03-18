@@ -1,8 +1,11 @@
 import esbuild from "esbuild";
 import process from "process";
+import fs from "fs";
+import { createRequire } from "module";
 import builtins from "builtin-modules";
-import { sassPlugin } from 'esbuild-sass-plugin';
 import { copy } from "esbuild-plugin-copy";
+
+const require = createRequire(import.meta.url);
 
 const banner =
 `/*
@@ -17,7 +20,7 @@ const context = await esbuild.context({
   banner: {
     js: banner,
   },
-  entryPoints: ["src/main.ts", "src/styles.scss"],
+  entryPoints: ["src/main.ts", "src/styles.css"],
   bundle: true,
   external: [
     "obsidian",
@@ -42,11 +45,12 @@ const context = await esbuild.context({
   treeShaking: true,
   outdir: "dist",
   plugins: [
-    sassPlugin({}),
     copy({
       resolveFrom: "cwd",
       watch: !prod,
-      assets: [ { from: "manifest.json", to: "dist/manifest.json" } ],
+      assets: [
+        { from: "manifest.json", to: "dist/manifest.json" },
+      ],
     }),
   ],
 });
