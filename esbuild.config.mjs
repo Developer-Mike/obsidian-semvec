@@ -2,6 +2,8 @@ import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
 import { copy } from "esbuild-plugin-copy";
+import fs from "fs";
+import _path from "path";
 
 const banner =
 `/*
@@ -11,6 +13,67 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+
+// Plugin to inline the WASM glue module so onnxruntime-web doesn't need dynamic import()
+const ortWasmInlinePlugin = {
+  name: "ort-wasm-inline",
+  setup(build) {
+    const ortBundlePath = _path.resolve("node_modules/onnxruntime-web/dist/ort.wasm.bundle.min.mjs");
+    const namespace = "ort-inline";
+
+    // Redirect onnxruntime-web imports to our custom namespace
+    build.onResolve({ filter: /^onnxruntime-web$/ }, () => ({
+      path: ortBundlePath,
+      namespace,
+    }));
+
+    // Load and patch the bundle to inline the WASM glue
+    build.onLoad({ filter: /.*/, namespace }, async (args) => {
+      let contents = await fs.promises.readFile(args.path, "utf8");
+
+      // Read the WASM glue module and convert to a self-contained function
+      const glueFile = _path.join(_path.dirname(args.path), "ort-wasm-simd-threaded.mjs");
+      let glue = await fs.promises.readFile(glueFile, "utf8");
+      // Strip ESM export and trailing pthread worker detection code
+      glue = glue.replace(/export\s+default\s+ortWasmThreaded[\s\S]*$/, "");
+
+      // Force Emscripten glue into Node.js mode so it uses fs.readFileSync instead of fetch().
+      // Obsidian's Electron renderer has process.type==="renderer" which Emscripten excludes,
+      // but Node.js APIs (fs, path) are fully available.
+      glue = glue.replace(
+        /&&\s*"renderer"\s*!=\s*globalThis\.process\?\.\s*type/,
+        ""
+      );
+
+      // Remove the createRequire + worker setup block entirely.
+      // It does: import("module") → createRequire → var require = ... → require("worker_threads")
+      // Problems: import("module") fails in Obsidian, and `var require` hoists to shadow
+      // esbuild's CJS require, breaking all subsequent require() calls.
+      // In CJS, require is already available. Workers aren't needed (numThreads=1).
+      glue = glue.replace(
+        /if\(m\)\{const \{createRequire:a\}=await import\("module"\);var require=a\(import\.meta\.url\),ba=require\("worker_threads"\);global\.Worker=ba\.Worker;[^}]*\}/,
+        "if(m){}"
+      );
+
+      // Replace import.meta.url with a dummy file URL for remaining references
+      const metaUrlShim = '"file:///plugin.js"';
+      glue = glue.replace(/import\.meta\.url/g, metaUrlShim);
+      contents = contents.replace(/import\.meta\.url/g, metaUrlShim);
+
+      // Inject the glue function inline (it defines `ortWasmThreaded` as a named function)
+      const prefix = glue + "\nvar __ortWasmGlue = ortWasmThreaded;\n";
+
+      // Replace: async n=>(await import(...n)).default
+      // With:    async n=>__ortWasmGlue
+      contents = contents.replace(
+        /async\s+(\w)=>\(await import\([^)]*\1\)\)\.default/,
+        "async $1=>__ortWasmGlue"
+      );
+
+      return { contents: prefix + contents, loader: "js", resolveDir: _path.dirname(args.path) };
+    });
+  },
+};
 
 const context = await esbuild.context({
   banner: {
@@ -34,21 +97,20 @@ const context = await esbuild.context({
     "@lezer/lr",
     ...builtins
   ],
-  define: {
-    "import.meta.url": JSON.stringify("file:///ort-placeholder"),
-  },
   format: "cjs",
-  target: "es2018",
+  target: "es2020",
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
   outdir: "dist",
   plugins: [
+    ortWasmInlinePlugin,
     copy({
       resolveFrom: "cwd",
       watch: !prod,
       assets: [
         { from: "manifest.json", to: "dist/manifest.json" },
+        { from: "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm", to: "dist/ort-wasm-simd-threaded.wasm" },
       ],
     }),
   ],

@@ -12,6 +12,7 @@ const MODELS = {
 const MODEL_FILES = [
   "tokenizer.json",
   "onnx/model.onnx",
+  "onnx/model.onnx_data"
 ]
 
 export default class EmbeddingModelManager {
@@ -86,8 +87,17 @@ export default class EmbeddingModelManager {
     }
   }
 
+  private getPluginDir(): string {
+    const adapter = this.plugin.app.vault.adapter as FileSystemAdapter
+    return path.join(adapter.getBasePath(), this.plugin.manifest.dir!)
+  }
+
   private async getSession(): Promise<ort.InferenceSession> {
     if (this.session) return this.session
+
+    // Configure WASM: point to plugin directory so Emscripten's fs.readFileSync can find it
+    ort.env.wasm.numThreads = 1
+    ort.env.wasm.wasmPaths = this.getPluginDir() + "/"
 
     await this.downloadModel()
 
@@ -95,7 +105,12 @@ export default class EmbeddingModelManager {
     this.loadTokenizer(modelDir)
 
     const modelPath = path.join(modelDir, "onnx", "model.onnx")
-    this.session = await ort.InferenceSession.create(modelPath)
+    const modelBuffer = fs.readFileSync(modelPath)
+    const externalDataPath = path.join(modelDir, "onnx", "model.onnx_data")
+    const externalData = fs.readFileSync(externalDataPath)
+    this.session = await ort.InferenceSession.create(modelBuffer.buffer, {
+      externalData: [{ path: "model.onnx_data", data: externalData.buffer }],
+    })
 
     return this.session
   }
