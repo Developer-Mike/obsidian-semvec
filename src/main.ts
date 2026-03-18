@@ -1,12 +1,13 @@
 import { Plugin } from "obsidian"
-import SettingsManager from "./settings"
+import EMBEDDINGGEMMA from "./embedding/configs/embeddinggemma"
+import EmbeddingModel from "./embedding/embedding-model"
 import DatabaseManager from "./managers/database-manager"
-import EmbeddingModelManager from "./managers/embedding-model-manager"
+import SettingsManager from "./settings"
 
 export default class SemVec extends Plugin {
   settings: SettingsManager
   database: DatabaseManager
-  embedding: EmbeddingModelManager
+  models: Record<string, EmbeddingModel> = {}
 
   override async onload() {
     this.settings = new SettingsManager(this)
@@ -16,9 +17,11 @@ export default class SemVec extends Plugin {
     this.database = new DatabaseManager(this)
     await this.database.initialize()
 
-    this.embedding = new EmbeddingModelManager(this)
+    // DEBUG
+    this.models.embeddinggemma = new EmbeddingModel(this, EMBEDDINGGEMMA)
+    await this.models.embeddinggemma.download()
 
-    const vector = await this.embedding.getVector("This is a sample text.")
+    const vector = await this.models.embeddinggemma.getVector("This is a sample text.")
     console.log(vector)
   }
 
