@@ -1,7 +1,13 @@
 import { pipeline, FeatureExtractionPipeline } from "@huggingface/transformers"
+import SemVec from "src/main"
 
 export default class EmbeddingModelManager {
+  private plugin: SemVec
   private extractor: FeatureExtractionPipeline | null = null
+
+  constructor(plugin: SemVec) {
+    this.plugin = plugin
+  }
 
   private async getExtractor(): Promise<FeatureExtractionPipeline> {
     if (this.extractor) return this.extractor

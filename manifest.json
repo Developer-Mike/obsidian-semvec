@@ -1,6 +1,6 @@
 {
-	"id": "semver",
-	"name": "SemVer",
+	"id": "semvec",
+	"name": "SemVec",
 	"version": "0.0.1",
 	"minAppVersion": "1.1.0",
 	"description": "Search your notes semantically.",

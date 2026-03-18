@@ -1,5 +1,5 @@
 import { create, save as saveOrama, load as loadOrama, type AnyOrama, type RawData } from "@orama/orama"
-import SemVer from "src/main"
+import SemVec from "src/main"
 
 const DB_FILENAME = "index.json"
 const SCHEMA = {
@@ -12,10 +12,10 @@ const SCHEMA = {
 } as const
 
 export default class DatabaseManager {
-  private plugin: SemVer
+  private plugin: SemVec
   db: AnyOrama
 
-  constructor(plugin: SemVer) {
+  constructor(plugin: SemVec) {
     this.plugin = plugin
   }
 

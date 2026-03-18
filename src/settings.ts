@@ -1,22 +1,22 @@
 import { PluginSettingTab } from "obsidian"
-import SemVer from "./main"
+import SemVec from "./main"
 
-export interface SemVerSettings {
+export interface SemVecSettings {
 
 }
 
-export const DEFAULT_SETTINGS: Partial<SemVerSettings> = {
+export const DEFAULT_SETTINGS: Partial<SemVecSettings> = {
 
 }
 
 export default class SettingsManager {
-  static SETTINGS_CHANGED_EVENT = 'semver:settings-changed'
+  static SETTINGS_CHANGED_EVENT = 'semvec:settings-changed'
 
-  private plugin: SemVer
-  private settings: SemVerSettings
-  private settingsTab: SemVerSettingTab
+  private plugin: SemVec
+  private settings: SemVecSettings
+  private settingsTab: SemVecSettingTab
 
-  constructor(plugin: SemVer) {
+  constructor(plugin: SemVec) {
     this.plugin = plugin
   }
 
@@ -29,26 +29,26 @@ export default class SettingsManager {
     await this.plugin.saveData(this.settings)
   }
 
-  getSetting<T extends keyof SemVerSettings>(key: T): SemVerSettings[T] {
+  getSetting<T extends keyof SemVecSettings>(key: T): SemVecSettings[T] {
     return this.settings[key]
   }
 
-  async setSetting(data: Partial<SemVerSettings>) {
+  async setSetting(data: Partial<SemVecSettings>) {
     this.settings = Object.assign(this.settings, data)
     await this.saveSettings()
     this.plugin.app.workspace.trigger(SettingsManager.SETTINGS_CHANGED_EVENT)
   }
 
   addSettingsTab() {
-    this.settingsTab = new SemVerSettingTab(this.plugin, this)
+    this.settingsTab = new SemVecSettingTab(this.plugin, this)
     this.plugin.addSettingTab(this.settingsTab)
   }
 }
 
-export class SemVerSettingTab extends PluginSettingTab {
+export class SemVecSettingTab extends PluginSettingTab {
   settingsManager: SettingsManager
 
-  constructor(plugin: SemVer, settingsManager: SettingsManager) {
+  constructor(plugin: SemVec, settingsManager: SettingsManager) {
     super(plugin.app, plugin)
     this.settingsManager = settingsManager
   }
