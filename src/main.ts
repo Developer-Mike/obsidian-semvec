@@ -23,12 +23,6 @@ export default class SemVec extends Plugin {
     this.indexer = new IndexerManager(this)
 
     SemanticSearchView.register(this)
-    this.addRibbonIcon('dice', 'Activate view', () => {
-      this.app.workspace.getLeftLeaf(false)?.setViewState({
-        type: VIEW_TYPE_SEMANTIC_SEARCH,
-        active: true
-      })
-    })
 
     // DEBUG
     this.models.embeddinggemma = new EmbeddingModel(this, EMBEDDINGGEMMA)

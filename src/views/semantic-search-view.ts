@@ -11,6 +11,19 @@ export class SemanticSearchView extends ItemView {
       VIEW_TYPE_SEMANTIC_SEARCH,
       (leaf) => new SemanticSearchView(plugin, leaf)
     )
+
+    plugin.addRibbonIcon('scan-search', 'Open Semantic Search', () => {
+      const views = plugin.app.workspace.getLeavesOfType(VIEW_TYPE_SEMANTIC_SEARCH)
+      if (views.length > 0) {
+        plugin.app.workspace.setActiveLeaf(views[0])
+        return
+      }
+
+      plugin.app.workspace.getLeftLeaf(false)?.setViewState({
+        type: VIEW_TYPE_SEMANTIC_SEARCH,
+        active: true
+      })
+    })
   }
 
   constructor(plugin: SemVec, leaf: WorkspaceLeaf) {
