@@ -3,7 +3,7 @@ import EMBEDDINGGEMMA from "./embedding/configs/embeddinggemma"
 import EmbeddingModelWorker from "./embedding/embedding-model-worker"
 import DatabaseManager from "./managers/database-manager"
 import IndexerManager from "./managers/indexer-manager"
-import SettingsManager from "./settings"
+import SettingsManager, { MODELS } from "./settings"
 import { IndexingProgressStatusBarItem } from "./views/indexing-progress-status-bar-item"
 import { SemanticSearchView } from "./views/semantic-search-view"
 
@@ -27,8 +27,9 @@ export default class SemVec extends Plugin {
     new IndexingProgressStatusBarItem(this)
 
     // DEBUG
-    this.models.embeddinggemma = new EmbeddingModelWorker(this, EMBEDDINGGEMMA)
-    await this.models.embeddinggemma.download()
+    const model = this.settings.getSetting("model")
+    this.models[model] = new EmbeddingModelWorker(this, MODELS[model])
+    await this.models[model].download()
   }
 
   override async onunload() {

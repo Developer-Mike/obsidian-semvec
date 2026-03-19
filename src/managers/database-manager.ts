@@ -7,7 +7,7 @@ export type DBEntry = {
   startOffset: number,
   endOffset: number,
   type: string,
-  contentHash: string,
+  content: string,
   embedding: number[]
 }
 
@@ -17,7 +17,7 @@ const SCHEMA = {
   startOffset: "number",
   endOffset: "number",
   type: "string", // e.g. "heading", "paragraph"
-  contentHash: "string", // MD5 hash of the content for change detection
+  content: "string",
   embedding: "vector[768]"
 } as const
 
@@ -46,7 +46,9 @@ export default class DatabaseManager {
 
   async search(query: string, vector: number[], limit = 10) {
     const { hits } = await orama.search(this.db, {
-      mode: "vector",
+      mode: "hybrid",
+      term: query,
+      properties: ["content"],
       vector: { value: vector, property: "embedding" },
       limit
     })
@@ -68,9 +70,9 @@ export default class DatabaseManager {
   }
 
 
-  async hasEntry(path: string, contentHash: string): Promise<boolean> {
+  async hasEntry(path: string, content: string): Promise<boolean> {
     const { hits } = await orama.search(this.db, {
-      where: { path, contentHash },
+      where: { path, content },
       limit: 1
     })
 
@@ -82,7 +84,7 @@ export default class DatabaseManager {
     this.save()
   }
 
-  async cleanupEntriesForFile(path: string, contentHashes: Set<string>) {
+  async cleanupEntriesForFile(path: string, contents: Set<string>) {
     const { hits } = await orama.search(this.db, {
       term: path,
       properties: ["path"],
@@ -93,7 +95,7 @@ export default class DatabaseManager {
     let removedEntries = 0
     for (const hit of hits) {
       const entry = hit.document
-      if (contentHashes.has(entry.contentHash))
+      if (contents.has(entry.contents))
         continue
 
       await orama.remove(this.db, hit.id)

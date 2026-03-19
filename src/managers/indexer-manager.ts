@@ -1,6 +1,5 @@
 import { TFile } from "obsidian"
 import SemVec from "src/main"
-import crypto from "crypto"
 
 export default class IndexerManager {
   private plugin: SemVec
@@ -59,8 +58,8 @@ export default class IndexerManager {
     const content = await this.plugin.app.vault.cachedRead(file)
 
     const sections = metadata.sections || []
-    const contentHashes = new Set<string>()
-    let newIndexedSections = 0
+    const contents = new Set<string>()
+    let newIndexedFragments = 0
     for (const section of sections) {
       if (!["heading", "paragraph", "list", "table"].includes(section.type))
         continue // Only index headings and paragraphs for now
@@ -70,28 +69,32 @@ export default class IndexerManager {
         section.position.end.offset
       )
 
-      const sectionHash = crypto.createHash('md5')
-        .update(sectionContent).digest('hex')
-      contentHashes.add(sectionHash)
+      const fragments = sectionContent.split("\n")
+      for (const fragment of fragments) {
+        const fragmentStartOffset = section.position.start.offset +
+          fragments.slice(0, fragments.indexOf(fragment))
+          .reduce((sum, f) => sum + f.length + 1, 0)
+        const fragmentEndOffset = fragmentStartOffset + fragment.length
 
-      if (await this.plugin.database.hasEntry(file.path, sectionHash))
-        continue // Already indexed
+        contents.add(fragment)
+        if (await this.plugin.database.hasEntry(file.path, fragment))
+          continue // Already indexed
 
-      const model = this.plugin.models[this.plugin.settings.getSetting("model")]
-      const embedding = await model.getVector(sectionContent)
-      await this.plugin.database.insertEntry({
-        path: file.path,
-        startOffset: section.position.start.offset,
-        endOffset: section.position.end.offset,
-        type: section.type,
-        contentHash: sectionHash,
-        embedding
-      })
-      newIndexedSections++
+        const model = this.plugin.models[this.plugin.settings.getSetting("model")]
+        const embedding = await model.getVector(sectionContent)
+        await this.plugin.database.insertEntry({
+          path: file.path,
+          startOffset: fragmentStartOffset,
+          endOffset: fragmentEndOffset,
+          type: section.type,
+          content: fragment,
+          embedding
+        })
+        newIndexedFragments++
+      }
     }
 
-    const cleanedUpSections = await this.plugin.database.cleanupEntriesForFile(file.path, contentHashes)
-
-    console.debug(`Indexed ${file.name}: +${newIndexedSections} -${cleanedUpSections}`)
+    const cleanedUpFragments = await this.plugin.database.cleanupEntriesForFile(file.path, contents)
+    console.debug(`Indexed ${file.name}: +${newIndexedFragments} -${cleanedUpFragments}`)
   }
 }

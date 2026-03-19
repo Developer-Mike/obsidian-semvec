@@ -1,12 +1,20 @@
 import { PluginSettingTab } from "obsidian"
+import EMBEDDINGGEMMA from "./embedding/configs/embeddinggemma"
+import QWEN3 from "./embedding/configs/qwen3"
+import { EmbeddingModelConfig } from "./embedding/embedding-model-worker"
 import SemVec from "./main"
 
+export const MODELS: Record<string, EmbeddingModelConfig> = {
+  embeddinggemma: EMBEDDINGGEMMA,
+  qwen3: QWEN3
+} as const
+
 export interface SemVecSettings {
-  model: string
+  model: keyof typeof MODELS
 }
 
 export const DEFAULT_SETTINGS: Partial<SemVecSettings> = {
-  model: "embeddinggemma"
+  model: "qwen3"
 }
 
 export default class SettingsManager {
