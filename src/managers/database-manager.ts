@@ -2,6 +2,15 @@ import * as orama from "@orama/orama"
 import { type AnyOrama, type RawData } from "@orama/orama"
 import SemVec from "src/main"
 
+export type DBEntry = {
+  path: string,
+  startOffset: number,
+  endOffset: number,
+  type: string,
+  contentHash: string,
+  embedding: number[]
+}
+
 const DB_FILENAME = "index.json"
 const SCHEMA = {
   path: "string",
@@ -35,6 +44,16 @@ export default class DatabaseManager {
     }
   }
 
+  async search(vector: number[], limit = 10) {
+    const { hits } = await orama.search(this.db, {
+      mode: "vector",
+      vector: { value: vector, property: "embedding" },
+      limit
+    })
+
+    return hits.map(hit => hit.document as unknown as DBEntry)
+  }
+
   async onFileMoved(oldPath: string, newPath: string) {
     const { hits } = await orama.search(this.db, {
       where: { path: oldPath },
@@ -58,14 +77,7 @@ export default class DatabaseManager {
     return hits.length > 0
   }
 
-  async insertEntry(entry: {
-    path: string,
-    startOffset: number,
-    endOffset: number,
-    type: string,
-    contentHash: string,
-    embedding: number[]
-  }) {
+  async insertEntry(entry: DBEntry) {
     await orama.insert(this.db, { ...entry })
     this.save()
   }

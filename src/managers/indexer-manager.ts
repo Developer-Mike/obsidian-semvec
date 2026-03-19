@@ -57,7 +57,8 @@ export default class IndexerManager {
       if (await this.plugin.database.hasEntry(file.path, sectionHash))
         continue // Already indexed
 
-      const embedding = await this.plugin.models.embeddinggemma.getVector(sectionContent)
+      const model = this.plugin.models[this.plugin.settings.getSetting("model")]
+      const embedding = await model.getVector(sectionContent)
       await this.plugin.database.insertEntry({
         path: file.path,
         startOffset: section.position.start.offset,

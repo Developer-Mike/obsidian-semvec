@@ -2,11 +2,11 @@ import { PluginSettingTab } from "obsidian"
 import SemVec from "./main"
 
 export interface SemVecSettings {
-
+  model: string
 }
 
 export const DEFAULT_SETTINGS: Partial<SemVecSettings> = {
-
+  model: "embeddinggemma"
 }
 
 export default class SettingsManager {
