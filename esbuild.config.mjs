@@ -75,7 +75,15 @@ const ortObsidianPlugin = {
         "async $1=>__ortWasmGlue"
       );
 
-      const contents = glue + "\nvar __ortWasmGlue = ortWasmThreaded;\n" + bundle;
+      // Inline WASM binary as base64 so the plugin is fully self-contained
+      const wasmBuf = await fs.promises.readFile(path.join(ortDir, "ort-wasm-simd-threaded.wasm"));
+      const wasmB64 = wasmBuf.toString("base64");
+
+      const contents =
+        glue +
+        "\nvar __ortWasmGlue = ortWasmThreaded;\n" +
+        `\nglobalThis.__ORT_WASM_BASE64 = "${wasmB64}";\n` +
+        bundle;
       return { contents, loader: "js", resolveDir: ortDir };
     });
   },
@@ -114,7 +122,6 @@ const context = await esbuild.context({
       watch: !prod,
       assets: [
         { from: "manifest.json", to: "dist/manifest.json" },
-        { from: "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm", to: "dist/ort-wasm-simd-threaded.wasm" },
       ],
     }),
   ],

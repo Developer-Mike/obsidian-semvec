@@ -6,6 +6,7 @@ import * as path from "path"
 import SemVec from "src/main"
 import ModelTokenizer from "./model-tokenizer"
 
+const WASM_FILENAME = "ort-wasm-simd-threaded.wasm"
 const MODELS_FOLDER = "models"
 const MODEL_TOKENIZER_PATH = "tokenizer.json"
 const MODEL_ONNX_PATH = "model.onnx"
@@ -71,12 +72,26 @@ export default class EmbeddingModel {
     return true
   }
 
+  private setup(): void {
+    const wasmDir = path.join(
+      (this.plugin.app.vault.adapter as FileSystemAdapter).getBasePath(),
+      this.plugin.manifest.dir!,
+      "wasm"
+    )
+
+    // Extract bundled WASM to plugin dir on first run
+    const wasmPath = path.join(wasmDir, WASM_FILENAME)
+    if (!fs.existsSync(wasmPath) && (globalThis as any).__ORT_WASM_BASE64) {
+      fs.mkdirSync(wasmDir, { recursive: true })
+      fs.writeFileSync(wasmPath, Buffer.from((globalThis as any).__ORT_WASM_BASE64, "base64"))
+    }
+
+    ort.env.wasm.wasmPaths = wasmDir + "/"
+  }
+
   private async getSession(): Promise<InferenceSession> {
     if (this.session) return this.session
-    ort.env.wasm.wasmPaths = path.join(
-      (this.plugin.app.vault.adapter as FileSystemAdapter).getBasePath(),
-      this.plugin.manifest.dir!
-    ) + "/"
+    this.setup()
 
     const modelBuffer = fs.readFileSync(path.join(this.dir, MODEL_ONNX_PATH))
     const modelData = fs.readFileSync(path.join(this.dir, MODEL_ONNX_DATA_PATH))
