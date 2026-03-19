@@ -46,8 +46,7 @@ export default class DatabaseManager {
 
   async search(query: string, vector: number[], limit = 10) {
     const { hits } = await orama.search(this.db, {
-      mode: "hybrid",
-      term: query,
+      mode: "vector",
       vector: { value: vector, property: "embedding" },
       limit
     })
