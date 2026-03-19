@@ -1,4 +1,3 @@
-import * as fs from "fs"
 import { FileSystemAdapter, requestUrl } from "obsidian"
 import * as ort from "onnxruntime-web"
 import { InferenceSession } from "onnxruntime-web"
@@ -43,24 +42,28 @@ export default class EmbeddingModel {
     )
   }
 
-  isDownloaded(): boolean {
-    return fs.existsSync(path.join(this.dir, MODEL_TOKENIZER_PATH)) &&
-      fs.existsSync(path.join(this.dir, MODEL_ONNX_PATH)) &&
-      fs.existsSync(path.join(this.dir, MODEL_ONNX_DATA_PATH))
+  async isDownloaded(): Promise<boolean> {
+    const promises = await Promise.all([
+      path.join(this.dir, MODEL_TOKENIZER_PATH),
+      path.join(this.dir, MODEL_ONNX_PATH),
+      path.join(this.dir, MODEL_ONNX_DATA_PATH)
+    ].map(f => this.plugin.app.vault.adapter.exists(f)))
+
+    return !promises.some(exists => !exists)
   }
 
   async download(): Promise<boolean> {
-    if (this.isDownloaded()) return true
+    if (await this.isDownloaded()) return true
 
     try {
-      if (!fs.existsSync(this.dir))
-        fs.mkdirSync(this.dir, { recursive: true })
+      if (!(await this.plugin.app.vault.adapter.exists(this.dir)))
+        await this.plugin.app.vault.adapter.mkdir(this.dir)
 
       await Promise.all([
         [MODEL_TOKENIZER_PATH, this.config.sources.tokenizer],
         [MODEL_ONNX_PATH, this.config.sources.model],
         [MODEL_ONNX_DATA_PATH, this.config.sources.data],
-      ].map(async ([file, url]) => fs.writeFileSync(
+      ].map(async ([file, url]) => this.plugin.app.vault.adapter.writeBinary(
         path.join(this.dir, file),
         Buffer.from((await requestUrl({ url })).arrayBuffer)
       )))
@@ -72,7 +75,7 @@ export default class EmbeddingModel {
     return true
   }
 
-  private setup(): void {
+  private async setup(): Promise<void> {
     const wasmDir = path.join(
       (this.plugin.app.vault.adapter as FileSystemAdapter).getBasePath(),
       this.plugin.manifest.dir!,
@@ -81,9 +84,15 @@ export default class EmbeddingModel {
 
     // Extract bundled WASM to plugin dir on first run
     const wasmPath = path.join(wasmDir, WASM_FILENAME)
-    if (!fs.existsSync(wasmPath) && (globalThis as any).__ORT_WASM_BASE64) {
-      fs.mkdirSync(wasmDir, { recursive: true })
-      fs.writeFileSync(wasmPath, Buffer.from((globalThis as any).__ORT_WASM_BASE64, "base64"))
+    if (
+      !(await this.plugin.app.vault.adapter.exists(wasmPath)) &&
+      (globalThis as any).__ORT_WASM_BASE64
+    ) {
+      await this.plugin.app.vault.adapter.mkdir(wasmDir)
+      await this.plugin.app.vault.adapter.writeBinary(
+        wasmPath,
+        Buffer.from((globalThis as any).__ORT_WASM_BASE64, "base64")
+      )
     }
 
     ort.env.wasm.wasmPaths = wasmDir + "/"
@@ -91,12 +100,15 @@ export default class EmbeddingModel {
 
   private async getSession(): Promise<InferenceSession> {
     if (this.session) return this.session
-    this.setup()
+    await this.setup()
 
-    const modelBuffer = fs.readFileSync(path.join(this.dir, MODEL_ONNX_PATH))
-    const modelData = fs.readFileSync(path.join(this.dir, MODEL_ONNX_DATA_PATH))
-    this.session = await InferenceSession.create(modelBuffer.buffer, {
-      externalData: [{ path: "model.onnx_data", data: modelData.buffer }],
+    const modelBuffer = await this.plugin.app.vault.adapter
+      .readBinary(path.join(this.dir, MODEL_ONNX_PATH))
+    const modelData = await this.plugin.app.vault.adapter
+      .readBinary(path.join(this.dir, MODEL_ONNX_DATA_PATH))
+
+    this.session = await InferenceSession.create(modelBuffer, {
+      externalData: [{ path: "model.onnx_data", data: modelData }],
     })
 
     return this.session
@@ -105,7 +117,8 @@ export default class EmbeddingModel {
   private async getTokenizer(): Promise<ModelTokenizer> {
     if (this.tokenizer) return this.tokenizer
 
-    const data = fs.readFileSync(path.join(this.dir, MODEL_TOKENIZER_PATH), "utf-8")
+    const data = await this.plugin.app.vault.adapter
+      .read(path.join(this.dir, MODEL_TOKENIZER_PATH))
     const json = JSON.parse(data)
     this.tokenizer = new ModelTokenizer(json)
 
