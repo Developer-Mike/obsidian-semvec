@@ -4,7 +4,6 @@ import SemVec from "src/main"
 
 const DB_FILENAME = "index.json"
 const SCHEMA = {
-  id: "string",
   path: "string",
   startOffset: "number",
   endOffset: "number",
@@ -36,26 +35,17 @@ export default class DatabaseManager {
     }
   }
 
-  private getId(path: string, startOffset: number, endOffset: number): string {
-    return `${path}:${startOffset}-${endOffset}`
-  }
-
   async onFileMoved(oldPath: string, newPath: string) {
     const { hits } = await orama.search(this.db, {
       where: { path: oldPath },
       limit: 1000
     })
 
-    for (const hit of hits) {
-      const entry = hit.document
-      await orama.remove(this.db, hit.id);
-
-      const newId = this.getId(newPath, entry.startOffset, entry.endOffset)
-      await orama.insert(this.db, { ...entry, id: newId, path: newPath })
-      console.debug(`Updated entry ${hit.id} to new path ${newPath}.`)
-    }
+    for (const hit of hits)
+      await orama.update(this.db, hit.id, { path: newPath })
 
     this.save()
+    return hits.length
   }
 
 
@@ -76,9 +66,7 @@ export default class DatabaseManager {
     contentHash: string,
     embedding: number[]
   }) {
-    const id = this.getId(entry.path, entry.startOffset, entry.endOffset)
-    await orama.insert(this.db, { id, ...entry })
-
+    await orama.insert(this.db, { ...entry })
     this.save()
   }
 
@@ -88,16 +76,18 @@ export default class DatabaseManager {
       limit: 1000
     })
 
+    let removedEntries = 0
     for (const hit of hits) {
       const entry = hit.document
       if (contentHashes.has(entry.contentHash))
         continue
 
       await orama.remove(this.db, hit.id)
-      console.debug(`Deleted entry ${hit.id} for file ${path} due to missing content hash.`)
+      removedEntries++
     }
 
     this.save()
+    return removedEntries
   }
 
   async save() {

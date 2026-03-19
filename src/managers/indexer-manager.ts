@@ -20,7 +20,9 @@ export default class IndexerManager {
       "rename",
       async (file, oldPath) => {
         if (!(file instanceof TFile)) return
-        await this.plugin.database.onFileMoved(oldPath, file.path)
+
+        const movedIndexesCount = await this.plugin.database.onFileMoved(oldPath, file.path)
+        console.debug(`Moved ${file.name}'s indexes (${movedIndexesCount})`)
       }
     ))
 
@@ -41,6 +43,7 @@ export default class IndexerManager {
 
     const sections = metadata.sections || []
     const contentHashes = new Set<string>()
+    let newIndexedSections = 0
     for (const section of sections) {
       const sectionContent = content.substring(
         section.position.start.offset,
@@ -63,10 +66,11 @@ export default class IndexerManager {
         contentHash: sectionHash,
         embedding
       })
-
-      console.debug(`Indexed section in ${file.path} [${section.position.start.offset}, ${section.position.end.offset}] with hash ${sectionHash}`)
+      newIndexedSections++
     }
 
-    await this.plugin.database.cleanupEntriesForFile(file.path, contentHashes)
+    const cleanedUpSections = await this.plugin.database.cleanupEntriesForFile(file.path, contentHashes)
+
+    console.debug(`Indexed ${file.name}: +${newIndexedSections} -${cleanedUpSections}`)
   }
 }
