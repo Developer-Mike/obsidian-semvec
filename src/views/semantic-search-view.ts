@@ -126,14 +126,13 @@ export class SemanticSearchView extends ItemView {
 
       const content = await this.plugin.app.vault.cachedRead(file)
       const snippet = content.substring(
-        Math.max(0, result.startOffset - 20),
-        Math.min(content.length, result.endOffset + 20)
+        result.startOffset, result.endOffset + 1
       ).trim()
       card.createDiv({ cls: "semvec-result-snippet", text: snippet })
 
       card.addEventListener("click", () => this.openFileAtMatch(file, {
         content,
-        matches: [[result.startOffset, result.endOffset]]
+        matches: [[result.startOffset, result.endOffset + 1]]
       }))
     }
   }

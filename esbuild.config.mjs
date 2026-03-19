@@ -13,89 +13,136 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = process.argv[2] === "production";
 
+const ortDir = path.resolve("node_modules/onnxruntime-web/dist")
+
 /**
- * esbuild plugin that patches onnxruntime-web for Obsidian compatibility.
+ * Patches onnxruntime-web glue + bundle for use inside a Web Worker.
  *
- * Obsidian plugins run in Electron's renderer with Node.js enabled, but:
- *   1. Dynamic import() of file:// or app:// URLs is blocked
- *   2. fetch() of file:// URLs is blocked
- *   3. import.meta.url is empty in CJS output
- *
- * This plugin fixes all three by patching at build time:
- *   - Inlines the Emscripten WASM glue (ort-wasm-simd-threaded.mjs) to avoid dynamic import
- *   - Forces the glue into Node.js mode so it uses fs.readFileSync instead of fetch
- *   - Removes the createRequire block that shadows CJS require
- *   - Replaces import.meta.url with a dummy URL for path resolution
+ * The worker receives the WASM binary via postMessage and sets ort.env.wasm.wasmBinary,
+ * so no base64 inlining or Node.js fs mode is needed. The glue just needs:
+ *   - ESM export stripped (bundled as IIFE)
+ *   - Dynamic import() replaced with inlined reference
+ *   - import.meta.url replaced (unavailable in IIFE)
+ *   - createRequire block removed (no Node.js module system)
  */
-const ortObsidianPlugin = {
-  name: "ort-obsidian",
+async function buildWorkerOrtContents() {
+  const ortBundlePath = path.join(ortDir, "ort.wasm.bundle.min.mjs");
+  let bundle = await fs.promises.readFile(ortBundlePath, "utf8");
+  let glue = await fs.promises.readFile(path.join(ortDir, "ort-wasm-simd-threaded.mjs"), "utf8");
+
+  // Strip ESM export and trailing pthread worker auto-start code
+  glue = glue.replace(/export\s+default\s+ortWasmThreaded[\s\S]*$/, "");
+
+  // Remove the createRequire + worker_threads block
+  glue = glue.replace(
+    /if\(m\)\{const \{createRequire:\w+\}=await import\("module"\);var require=\w+\(import\.meta\.url\)[^}]*\}/,
+    "if(m){}"
+  );
+
+  // Replace import.meta.url (unavailable in IIFE)
+  glue = glue.replace(/import\.meta\.url/g, '"file:///plugin.js"');
+
+  // Patch the ort bundle
+  bundle = bundle.replace(/import\.meta\.url/g, '"file:///plugin.js"');
+
+  // Replace dynamic import() of glue with inlined reference
+  bundle = bundle.replace(
+    /async\s+(\w)=>\(await import\([^)]*\1\)\)\.default/,
+    "async $1=>__ortWasmGlue"
+  );
+
+  return glue + "\nvar __ortWasmGlue = ortWasmThreaded;\n" + bundle;
+}
+
+/**
+ * esbuild plugin that patches onnxruntime-web for the Web Worker context.
+ */
+const ortWorkerPlugin = {
+  name: "ort-worker",
   setup(build) {
-    const ortDir = path.resolve("node_modules/onnxruntime-web/dist");
     const ortBundlePath = path.join(ortDir, "ort.wasm.bundle.min.mjs");
-    const ns = "ort-obsidian";
 
     build.onResolve({ filter: /^onnxruntime-web$/ }, () => ({
       path: ortBundlePath,
-      namespace: ns,
+      namespace: "ort-worker",
     }));
 
-    build.onLoad({ filter: /.*/, namespace: ns }, async (args) => {
-      let bundle = await fs.promises.readFile(args.path, "utf8");
-      let glue = await fs.promises.readFile(path.join(ortDir, "ort-wasm-simd-threaded.mjs"), "utf8");
-
-      // --- Patch the Emscripten glue (ort-wasm-simd-threaded.mjs) ---
-
-      // Strip ESM export and trailing pthread worker auto-start code
-      glue = glue.replace(/export\s+default\s+ortWasmThreaded[\s\S]*$/, "");
-
-      // Include Electron renderer in Node.js detection (Emscripten excludes it by default).
-      // This makes the glue use fs.readFileSync for WASM loading instead of fetch().
-      glue = glue.replace(/&&\s*"renderer"\s*!=\s*globalThis\.process\?\.\s*type/, "");
-
-      // Remove the createRequire + worker_threads block. It causes two problems:
-      //   - import("module") fails in Obsidian's renderer
-      //   - `var require = createRequire(...)` hoists and shadows esbuild's CJS require
-      // CJS require is already available; workers aren't needed (numThreads=1).
-      glue = glue.replace(
-        /if\(m\)\{const \{createRequire:\w+\}=await import\("module"\);var require=\w+\(import\.meta\.url\)[^}]*\}/,
-        "if(m){}"
-      );
-
-      // Replace import.meta.url (empty in CJS) with a valid dummy URL.
-      // Only used for path resolution fallbacks — actual WASM path is set via ort.env.wasm.wasmPaths.
-      glue = glue.replace(/import\.meta\.url/g, '"file:///plugin.js"');
-
-      // --- Patch the ort bundle (ort.wasm.bundle.min.mjs) ---
-
-      bundle = bundle.replace(/import\.meta\.url/g, '"file:///plugin.js"');
-
-      // Replace the dynamic import() of the glue module with our inlined reference
-      bundle = bundle.replace(
-        /async\s+(\w)=>\(await import\([^)]*\1\)\)\.default/,
-        "async $1=>__ortWasmGlue"
-      );
-
-      // Inline WASM binary as base64 so the plugin is fully self-contained
-      const wasmBuf = await fs.promises.readFile(path.join(ortDir, "ort-wasm-simd-threaded.wasm"));
-      const wasmB64 = wasmBuf.toString("base64");
-
-      const contents =
-        glue +
-        "\nvar __ortWasmGlue = ortWasmThreaded;\n" +
-        `\nglobalThis.__ORT_WASM_BASE64 = "${wasmB64}";\n` +
-        bundle;
-      return { contents, loader: "js", resolveDir: ortDir };
-    });
+    build.onLoad({ filter: /.*/, namespace: "ort-worker" }, async () => ({
+      contents: await buildWorkerOrtContents(),
+      loader: "js",
+      resolveDir: ortDir,
+    }));
   },
 };
 
+/**
+ * Shims Node.js builtins as empty objects for the worker build.
+ * The Emscripten glue conditionally requires these in Node.js mode,
+ * but a Web Worker takes the browser code path so they're never called.
+ */
+const nodeShimPlugin = {
+  name: "node-shim",
+  setup(build) {
+    const shimmed = ["fs", "path", "url", "util", "os", "crypto", "worker_threads", "perf_hooks"];
+    build.onResolve({ filter: new RegExp(`^(${shimmed.join("|")})$`) }, (args) => ({
+      path: args.path,
+      namespace: "node-shim",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "node-shim" }, () => ({
+      contents: "module.exports = {};",
+      loader: "js",
+    }));
+  },
+};
+
+// Build the worker as a self-contained bundle
+
+console.log("Building embedding worker...");
+const workerBuild = await esbuild.build({
+  entryPoints: ["src/embedding/embedding-worker.ts"],
+  bundle: true,
+  format: "iife",
+  target: "es2020",
+  write: false,
+  minify: prod,
+  plugins: [nodeShimPlugin, ortWorkerPlugin],
+});
+const workerCodeString = workerBuild.outputFiles[0].text;
+console.log(`Worker bundle: ${(workerCodeString.length / 1024 / 1024).toFixed(1)} MB`);
+
+// Plugins for the main bundle
+
+/** Injects the worker code as a virtual ES module import */
+const workerCodePlugin = {
+  name: "worker-code",
+  setup(build) {
+    build.onResolve({ filter: /^virtual:embedding-worker$/ }, () => ({
+      path: "virtual:embedding-worker",
+      namespace: "worker-code",
+    }));
+
+    build.onLoad({ filter: /.*/, namespace: "worker-code" }, () => ({
+      contents: `export default ${JSON.stringify(workerCodeString)};`,
+      loader: "js",
+    }));
+  },
+};
+
+// Read WASM binary for injection into the main bundle banner.
+// The main thread decodes this and transfers it to the worker via postMessage.
+const wasmBuf = await fs.promises.readFile(path.join(ortDir, "ort-wasm-simd-threaded.wasm"));
+const wasmB64 = wasmBuf.toString("base64");
+
+// Build the main plugin bundle
+
 const context = await esbuild.context({
-  banner: { js: banner },
+  banner: { js: banner + `\nglobalThis.__ORT_WASM_BASE64 = "${wasmB64}";\n` },
   entryPoints: ["src/main.ts", "src/styles.css"],
   bundle: true,
   external: [
     "obsidian",
     "electron",
+    "onnxruntime-web",
     "@codemirror/autocomplete",
     "@codemirror/collab",
     "@codemirror/commands",
@@ -116,7 +163,7 @@ const context = await esbuild.context({
   treeShaking: true,
   outdir: "dist",
   plugins: [
-    ortObsidianPlugin,
+    workerCodePlugin,
     copy({
       resolveFrom: "cwd",
       watch: !prod,

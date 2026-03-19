@@ -1,15 +1,15 @@
 import { Plugin } from "obsidian"
 import EMBEDDINGGEMMA from "./embedding/configs/embeddinggemma"
-import EmbeddingModel from "./embedding/embedding-model"
+import EmbeddingModelWorker from "./embedding/embedding-model-worker"
 import DatabaseManager from "./managers/database-manager"
 import IndexerManager from "./managers/indexer-manager"
 import SettingsManager from "./settings"
-import { SemanticSearchView, VIEW_TYPE_SEMANTIC_SEARCH } from "./views/semantic-search-view"
+import { SemanticSearchView } from "./views/semantic-search-view"
 
 export default class SemVec extends Plugin {
   settings: SettingsManager
   database: DatabaseManager
-  models: Record<string, EmbeddingModel> = {}
+  models: Record<string, EmbeddingModelWorker> = {}
   indexer: IndexerManager
 
   override async onload() {
@@ -25,14 +25,14 @@ export default class SemVec extends Plugin {
     SemanticSearchView.register(this)
 
     // DEBUG
-    this.models.embeddinggemma = new EmbeddingModel(this, EMBEDDINGGEMMA)
+    this.models.embeddinggemma = new EmbeddingModelWorker(this, EMBEDDINGGEMMA)
     await this.models.embeddinggemma.download()
-
-    /*const vector = await this.models.embeddinggemma.getVector("This is a sample text.")
-    console.log(vector)*/
   }
 
   override async onunload() {
+    for (const model of Object.values(this.models))
+      model.dispose()
+
     await this.database.save()
   }
 }

@@ -45,6 +45,9 @@ export default class IndexerManager {
     const contentHashes = new Set<string>()
     let newIndexedSections = 0
     for (const section of sections) {
+      if (!["heading", "paragraph"].includes(section.type))
+        continue // Only index headings and paragraphs for now
+
       const sectionContent = content.substring(
         section.position.start.offset,
         section.position.end.offset
