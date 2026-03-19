@@ -1,4 +1,4 @@
-import { EmbeddingModelConfig } from "../embedding-model"
+import { EmbeddingModelConfig } from "../embedding-model-worker"
 
 const QWEN3: EmbeddingModelConfig = {
   id: "qwen3",

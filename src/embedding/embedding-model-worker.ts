@@ -1,7 +1,6 @@
 import { FileSystemAdapter, requestUrl } from "obsidian"
 import * as path from "path"
 import SemVec from "src/main"
-import { EmbeddingModelConfig } from "./embedding-model"
 
 // Injected at build time by esbuild as a virtual module
 import workerCode from "virtual:embedding-worker"
@@ -10,6 +9,17 @@ const MODELS_FOLDER = "models"
 const MODEL_TOKENIZER_PATH = "tokenizer.json"
 const MODEL_ONNX_PATH = "model.onnx"
 const MODEL_ONNX_DATA_PATH = "model.onnx_data"
+
+export interface EmbeddingModelConfig {
+  id: string
+  label: string
+  millionParameters: number
+  sources: {
+    tokenizer: string
+    model: string
+    data: string
+  }
+}
 
 export default class EmbeddingModelWorker {
   private plugin: SemVec
@@ -26,7 +36,6 @@ export default class EmbeddingModelWorker {
     this.config = config
 
     this.dir = path.join(
-      (this.plugin.app.vault.adapter as FileSystemAdapter).getBasePath(),
       this.plugin.manifest.dir!,
       MODELS_FOLDER,
       this.config.id
@@ -45,6 +54,7 @@ export default class EmbeddingModelWorker {
 
   async download(): Promise<boolean> {
     if (await this.isDownloaded()) return true
+    console.log(`Downloading model "${this.config.label}"...`)
 
     try {
       if (!(await this.plugin.app.vault.adapter.exists(this.dir)))
@@ -57,7 +67,7 @@ export default class EmbeddingModelWorker {
       ].map(async ([file, url]) => this.plugin.app.vault.adapter.writeBinary(
         path.join(this.dir, file),
         Buffer.from((await requestUrl({ url })).arrayBuffer)
-      )))
+      ).then(() => console.log(`Downloaded ${file}`))))
     } catch (error) {
       console.error("Failed to download model:", error)
       return false

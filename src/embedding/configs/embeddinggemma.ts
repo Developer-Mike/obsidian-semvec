@@ -1,4 +1,4 @@
-import { EmbeddingModelConfig } from "../embedding-model"
+import { EmbeddingModelConfig } from "../embedding-model-worker"
 
 const EMBEDDINGGEMMA: EmbeddingModelConfig = {
   id: "embeddinggemma",

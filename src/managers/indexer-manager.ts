@@ -3,7 +3,12 @@ import SemVec from "src/main"
 import crypto from "crypto"
 
 export default class IndexerManager {
-  plugin: SemVec
+  private plugin: SemVec
+
+  private _progress = 0
+  get progress() { return this._progress }
+  private _queue = 0
+  get queue() { return this._queue }
 
   constructor(plugin: SemVec) {
     this.plugin = plugin
@@ -13,7 +18,19 @@ export default class IndexerManager {
   private addListeners() {
     this.plugin.registerEvent(this.plugin.app.metadataCache.on(
       "changed",
-      this.index.bind(this)
+      async file => {
+        this.plugin.app.metadataCache.trigger("semvec:indexing-progress")
+
+        this._queue++
+        await this.index(file)
+        this._progress++
+        this._queue--
+
+        if (this._queue === 0)
+          this._progress = 0
+
+        this.plugin.app.metadataCache.trigger("semvec:indexing-progress")
+      }
     ))
 
     this.plugin.registerEvent(this.plugin.app.vault.on(
@@ -45,7 +62,7 @@ export default class IndexerManager {
     const contentHashes = new Set<string>()
     let newIndexedSections = 0
     for (const section of sections) {
-      if (!["heading", "paragraph"].includes(section.type))
+      if (!["heading", "paragraph", "list", "table"].includes(section.type))
         continue // Only index headings and paragraphs for now
 
       const sectionContent = content.substring(

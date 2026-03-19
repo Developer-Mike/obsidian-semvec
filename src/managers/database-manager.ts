@@ -44,9 +44,10 @@ export default class DatabaseManager {
     }
   }
 
-  async search(vector: number[], limit = 10) {
+  async search(query: string, vector: number[], limit = 10) {
     const { hits } = await orama.search(this.db, {
-      mode: "vector",
+      mode: "hybrid",
+      term: query,
       vector: { value: vector, property: "embedding" },
       limit
     })
@@ -84,7 +85,9 @@ export default class DatabaseManager {
 
   async cleanupEntriesForFile(path: string, contentHashes: Set<string>) {
     const { hits } = await orama.search(this.db, {
-      where: { path },
+      term: path,
+      properties: ["path"],
+      exact: true,
       limit: 1000
     })
 

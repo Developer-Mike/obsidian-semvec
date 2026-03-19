@@ -1,5 +1,4 @@
-import { ItemView, TFile, WorkspaceLeaf, debounce, setIcon, FileView } from "obsidian"
-import * as orama from "@orama/orama"
+import { debounce, FileView, ItemView, setIcon, TFile, WorkspaceLeaf } from "obsidian"
 import SemVec from "src/main"
 
 export const VIEW_TYPE_SEMANTIC_SEARCH = "semantic-search"
@@ -111,7 +110,7 @@ export class SemanticSearchView extends ItemView {
       )
     }
 
-    const results = await this.plugin.database.search(vector, this.resultCountLimit)
+    const results = await this.plugin.database.search(query, vector, this.resultCountLimit)
 
     if (results.length === 0) return resultsContainer.createDiv(
       { cls: "semvec-empty", text: "No results found." }

@@ -4,6 +4,7 @@ import EmbeddingModelWorker from "./embedding/embedding-model-worker"
 import DatabaseManager from "./managers/database-manager"
 import IndexerManager from "./managers/indexer-manager"
 import SettingsManager from "./settings"
+import { IndexingProgressStatusBarItem } from "./views/indexing-progress-status-bar-item"
 import { SemanticSearchView } from "./views/semantic-search-view"
 
 export default class SemVec extends Plugin {
@@ -23,6 +24,7 @@ export default class SemVec extends Plugin {
     this.indexer = new IndexerManager(this)
 
     SemanticSearchView.register(this)
+    new IndexingProgressStatusBarItem(this)
 
     // DEBUG
     this.models.embeddinggemma = new EmbeddingModelWorker(this, EMBEDDINGGEMMA)
