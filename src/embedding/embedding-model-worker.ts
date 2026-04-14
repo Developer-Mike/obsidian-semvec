@@ -1,4 +1,4 @@
-import { FileSystemAdapter, requestUrl } from "obsidian"
+import { requestUrl } from "obsidian"
 import * as path from "path"
 import SemVec from "src/main"
 
@@ -7,6 +7,7 @@ import workerCode from "virtual:embedding-worker"
 
 const MODELS_FOLDER = "models"
 const MODEL_TOKENIZER_PATH = "tokenizer.json"
+const MODEL_TOKENIZER_CONFIG_PATH = "tokenizer_config.json"
 const MODEL_ONNX_PATH = "model.onnx"
 const MODEL_ONNX_DATA_PATH = "model.onnx_data"
 
@@ -14,8 +15,10 @@ export interface EmbeddingModelConfig {
   id: string
   label: string
   millionParameters: number
+  vectorDimension: number
   sources: {
     tokenizer: string
+    tokenizerConfig: string
     model: string
     data: string
   }
@@ -45,6 +48,7 @@ export default class EmbeddingModelWorker {
   async isDownloaded(): Promise<boolean> {
     const promises = await Promise.all([
       path.join(this.dir, MODEL_TOKENIZER_PATH),
+      path.join(this.dir, MODEL_TOKENIZER_CONFIG_PATH),
       path.join(this.dir, MODEL_ONNX_PATH),
       path.join(this.dir, MODEL_ONNX_DATA_PATH)
     ].map(f => this.plugin.app.vault.adapter.exists(f)))
@@ -62,6 +66,7 @@ export default class EmbeddingModelWorker {
 
       await Promise.all([
         [MODEL_TOKENIZER_PATH, this.config.sources.tokenizer],
+        [MODEL_TOKENIZER_CONFIG_PATH, this.config.sources.tokenizerConfig],
         [MODEL_ONNX_PATH, this.config.sources.model],
         [MODEL_ONNX_DATA_PATH, this.config.sources.data],
       ].map(async ([file, url]) => this.plugin.app.vault.adapter.writeBinary(
@@ -89,12 +94,16 @@ export default class EmbeddingModelWorker {
 
     this.worker.onmessage = (e: MessageEvent) => {
       const { id, type, ...rest } = e.data
+      console.log("[Embedding] Worker message:", type)
 
       const p = this.pending.get(id)
       if (!p) return
       this.pending.delete(id)
 
-      if (type === "error") p.reject(new Error(rest.message))
+      if (type === "error") {
+        console.error("[Embedding] Worker error:", rest.message)
+        p.reject(new Error(rest.message))
+      }
       else p.resolve(rest)
     }
 
@@ -108,10 +117,11 @@ export default class EmbeddingModelWorker {
     }
 
     const adapter = this.plugin.app.vault.adapter
-    const [modelBuffer, modelData, tokenizerJson] = await Promise.all([
+    const [modelBuffer, modelData, tokenizerJson, tokenizerConfigJson] = await Promise.all([
       adapter.readBinary(path.join(this.dir, MODEL_ONNX_PATH)),
       adapter.readBinary(path.join(this.dir, MODEL_ONNX_DATA_PATH)),
       adapter.read(path.join(this.dir, MODEL_TOKENIZER_PATH)),
+      adapter.read(path.join(this.dir, MODEL_TOKENIZER_CONFIG_PATH)),
     ])
 
     const wasmB64 = (globalThis as any).__ORT_WASM_BASE64
@@ -130,6 +140,7 @@ export default class EmbeddingModelWorker {
       modelBuffer,
       modelData,
       tokenizerJson,
+      tokenizerConfigJson,
     }, [wasmBinary, modelBuffer, modelData])
   }
 

@@ -14,7 +14,7 @@ export interface SemVecSettings {
 }
 
 export const DEFAULT_SETTINGS: Partial<SemVecSettings> = {
-  model: "qwen3"
+  model: "embeddinggemma"
 }
 
 export default class SettingsManager {
